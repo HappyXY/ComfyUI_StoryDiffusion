@@ -28,6 +28,7 @@ class CFGenerator:
         height,
         num_steps,
         cfg,
+        num_images_per_prompt,
         guidance,
         seed,
         prompt,

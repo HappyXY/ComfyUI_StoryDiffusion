@@ -434,6 +434,7 @@ def process_generation(
         denoise_or_ip_sacle,
         _style_strength_ratio,
         cfg,
+        num_images_per_prompt,
         seed_,
         id_length,
         general_prompt,
@@ -595,6 +596,7 @@ def process_generation(
                                 height=height,
                                 num_steps=_num_steps,
                                 cfg=cfg,
+                                num_images_per_prompt=num_images_per_prompt,
                                 guidance=guidance,
                                 seed=seed_,
                                 prompt=text,
@@ -616,6 +618,7 @@ def process_generation(
                                 height=height,
                                 num_steps=_num_steps,
                                 cfg=cfg,
+                                num_images_per_prompt=num_images_per_prompt,
                                 guidance=guidance,
                                 seed=seed_,
                                 prompt=text,
@@ -984,6 +987,7 @@ def process_generation(
                         height=height,
                         num_steps=_num_steps,
                         cfg=cfg,
+                        num_images_per_prompt=num_images_per_prompt,
                         guidance=guidance,
                         seed=seed_,
                         prompt=real_prompt,
@@ -999,6 +1003,7 @@ def process_generation(
                         height=height,
                         num_steps=_num_steps,
                         cfg=cfg,
+                        num_images_per_prompt=num_images_per_prompt,
                         guidance=guidance,
                         seed=seed_,
                         prompt=real_prompt,
@@ -1709,6 +1714,7 @@ class Storydiffusion_Sampler:
                 "seed": ("INT", {"default": 0, "min": 0, "max": MAX_SEED}),
                 "steps": ("INT", {"default": 20, "min": 1, "max": 100}),
                 "cfg": ("FLOAT", {"default": 7, "min": 0.0, "max": 100.0, "step": 0.1, "round": 0.01}),
+                "num_images_per_prompt": ("INT", {"default": 1, "min": 1, "max": 4}),
                 "denoise_or_ip_sacle": ("FLOAT", {"default": 1.0, "min": 0.1, "max": 1.0, "step": 0.1, "round": 0.01}),
                 "style_strength_ratio": ("INT", {"default": 20, "min": 1, "max": 100, "step": 1, "display": "number"}),
                 "guidance": (
@@ -1732,7 +1738,7 @@ class Storydiffusion_Sampler:
     CATEGORY = "Storydiffusion"
 
     def story_sampler(self, model,scene_prompts, negative_prompt, img_style, seed, steps,
-                  cfg, denoise_or_ip_sacle, style_strength_ratio,
+                  cfg, num_images_per_prompt, denoise_or_ip_sacle, style_strength_ratio,
                   guidance, mask_threshold, start_step,save_character,controlnet_scale,guidance_list,**kwargs):
         # get value from dict
         pipe=model.get("pipe")
@@ -1978,7 +1984,7 @@ class Storydiffusion_Sampler:
                 return (img, scene_prompts,)
             else:
                 gen = process_generation(pipe, upload_images, model_type, steps, img_style, denoise_or_ip_sacle,
-                                         style_strength_ratio, cfg,
+                                         style_strength_ratio, cfg, num_images_per_prompt,
                                          seed, id_length,
                                          character_prompt,
                                          negative_prompt,
@@ -2107,6 +2113,14 @@ class Storydiffusion_Sampler:
             torch.cuda.empty_cache()
         else:
             image_list = narry_list(image_pil_list)
+        
+        if len(image_list[0].shape)==5:
+            image_list_copy = []
+            for i in range(len(image_list)):
+                for j in range(image_list[0].shape[1]):
+                    image_list_copy.append(image_list[i][0,j,...])      
+            image_list=image_list_copy
+            
         image = torch.from_numpy(np.fromiter(image_list, np.dtype((np.float32, (height, width, 3)))))
         if use_storydif and not prompts_dual:
             try:
