@@ -52,8 +52,9 @@ if not os.path.exists(base_pt):
     os.makedirs(base_pt)
     
 def set_attention_processor(unet, id_length, is_ipadapter=False):
-    global attn_procs
+    global attn_procs, total_count
     attn_procs = {}
+    total_count = 0
     for name in unet.attn_processors.keys():
         cross_attention_dim = (
             None
@@ -71,6 +72,7 @@ def set_attention_processor(unet, id_length, is_ipadapter=False):
         if cross_attention_dim is None:
             if name.startswith("up_blocks"):
                 attn_procs[name] = SpatialAttnProcessor2_0(id_length=id_length)
+                total_count += 1
             else:
                 attn_procs[name] = AttnProcessor()
         else:
@@ -217,6 +219,8 @@ class SpatialAttnProcessor2_0(torch.nn.Module):
                 device=self.device,
                 dtype=self.dtype,
             )
+        #print('!!!!!!!!!!! write', write)
+        #print('@@@@@@@@@@ hidden_states', hidden_states.shape)
         if write:
             assert len(cur_character) == 1
             if hidden_states.shape[1] == (height_s // 32) * (width_s // 32):
@@ -277,6 +281,7 @@ class SpatialAttnProcessor2_0(torch.nn.Module):
                         )
                         for img_ind in range(img_nums)
                     ]
+                    #print('!!!!!!!!! img_num is', img_nums)
                     for img_ind in range(img_nums):
                         # print(img_nums)
                         # assert img_nums != 1
@@ -301,6 +306,7 @@ class SpatialAttnProcessor2_0(torch.nn.Module):
                             temb,
                         )
                 else:
+                    #print('!!!!!!!cur-step, rand_num is', cur_step, rand_num)
                     _, nums_token, channel = hidden_states.shape
                     # img_nums = total_batch_size // 2
                     # encoder_hidden_states = encoder_hidden_states.reshape(-1,img_nums,nums_token,channel)
@@ -310,7 +316,7 @@ class SpatialAttnProcessor2_0(torch.nn.Module):
                     encoder_hidden_states_tmp = torch.cat(
                         encoder_arr + [hidden_states[:, 0, :, :]], dim=1
                     )
-
+                    #print('!!!!!!!!!!!!!! encoder_hidden_states_tmp', encoder_hidden_states_tmp.shape)
                     hidden_states[:, 0, :, :] = self.__call2__(
                         attn,
                         hidden_states[:, 0, :, :],
@@ -324,6 +330,7 @@ class SpatialAttnProcessor2_0(torch.nn.Module):
                     attn, hidden_states, None, attention_mask, temb
                 )
         attn_count += 1
+        #print('!!!!!!!!!!! attn_count and total_count is ', attn_count, total_count)
         if attn_count == total_count:
             attn_count = 0
             cur_step += 1
@@ -364,6 +371,7 @@ class SpatialAttnProcessor2_0(torch.nn.Module):
         batch_size, sequence_length, channel = hidden_states.shape
 
         if attention_mask is not None:
+            #print('!!!!!!!!!!! attention_mask is not none', attention_mask.shape)
             attention_mask = attn.prepare_attention_mask(
                 attention_mask, sequence_length, batch_size
             )
@@ -382,6 +390,7 @@ class SpatialAttnProcessor2_0(torch.nn.Module):
 
         if encoder_hidden_states is None:
             encoder_hidden_states = hidden_states  # B, N, C
+            #print('!!!!!!!!!!! encoder_hidden_states', encoder_hidden_states.shape, hidden_states.shape)
         # else:
         #     encoder_hidden_states = encoder_hidden_states.view(-1,self.id_length+1,sequence_length,channel).reshape(-1,(self.id_length+1) * sequence_length,channel)
 
@@ -578,6 +587,7 @@ def process_generation(
                             prompt=cur_positive_prompts,
                             num_inference_steps=_num_steps,
                             guidance_scale=guidance,
+                            num_images_per_prompt=num_images_per_prompt,
                             output_type="pil",
                             max_sequence_length=256,
                             height=height,
@@ -660,6 +670,7 @@ def process_generation(
                             cur_positive_prompts,
                             num_inference_steps=_num_steps,
                             guidance_scale=cfg,
+                            num_images_per_prompt=num_images_per_prompt,
                             height=height,
                             width=width,
                             negative_prompt=cur_negative_prompt,
@@ -949,12 +960,13 @@ def process_generation(
         ]
     else:
         real_prompts_inds = [ind for ind in range(len(prompts))]
-    print(real_prompts_inds)
+    #print(real_prompts_inds)
     real_prompt_no, negative_prompt_style = apply_style_positive(style_name, "real_prompt")
     negative_prompt = str(negative_prompt) + str(negative_prompt_style)
-    # print(f"real_prompts_inds is {real_prompts_inds}")
+    print(f"real_prompts_inds is {real_prompts_inds}")
     for real_prompts_ind in real_prompts_inds:  #
         real_prompt = replace_prompts[real_prompts_ind]
+        #print(f"real_prompt : {real_prompt}")
         cur_character = get_ref_character(prompts[real_prompts_ind], character_dict)
         
         if model_type == "txt2img":
@@ -974,6 +986,7 @@ def process_generation(
                         prompt=real_prompt,
                         num_inference_steps=_num_steps,
                         guidance_scale=guidance,
+                        num_images_per_prompt=num_images_per_prompt,
                         output_type="pil",
                         max_sequence_length=256,
                         height=height,
@@ -1041,6 +1054,7 @@ def process_generation(
                         real_prompt,
                         num_inference_steps=_num_steps,
                         guidance_scale=cfg,
+                        num_images_per_prompt=num_images_per_prompt,
                         height=height,
                         width=width,
                         negative_prompt=negative_prompt,
