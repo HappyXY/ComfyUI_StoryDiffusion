@@ -1,7 +1,6 @@
 # !/usr/bin/env python
 # -*- coding: UTF-8 -*-
 import datetime
-import gc
 import logging
 import os
 import sys
@@ -31,7 +30,7 @@ from .utils.style_template import styles
 from .utils.load_models_utils import  get_lora_dict,get_instance_path
 from .PuLID.pulid.utils import resize_numpy_image_long
 from transformers import AutoModel, AutoTokenizer
-from comfy.utils import common_upscale,ProgressBar
+from comfy.utils import common_upscale
 import folder_paths
 from comfy.model_management import cleanup_models
 from comfy.clip_vision import load as clip_load
@@ -102,6 +101,9 @@ def get_scheduler(name,scheduler_):
     return scheduler
 
 
+
+
+
 def get_easy_function(easy_function, clip_vision, character_weights, ckpt_name, lora, repo_id,photomake_mode):
     auraface = False
     NF4 = False
@@ -122,10 +124,6 @@ def get_easy_function(easy_function, clip_vision, character_weights, ckpt_name, 
     low_vram=False
     TAG_mode=False
     SD35_mode=False
-    consistory=False
-    cached=False
-    inject=False
-    use_quantize=True
     if easy_function:
         easy_function = easy_function.strip().lower()
         if "auraface" in easy_function:
@@ -152,15 +150,7 @@ def get_easy_function(easy_function, clip_vision, character_weights, ckpt_name, 
             low_vram=True
         if "tag" in easy_function:
             TAG_mode=True
-        if "consi" in easy_function:
-            consistory=True
-        if "cache" in easy_function:
-            cached=True
-        if "inject" in easy_function:
-            inject=True
-        if "noquan" in easy_function:
-            use_quantize=False
-    
+   
     if clip_vision != "none":
         clip_vision_path = folder_paths.get_full_path("clip_vision", clip_vision)
     if character_weights != "none":
@@ -180,22 +170,18 @@ def get_easy_function(easy_function, clip_vision, character_weights, ckpt_name, 
     else:
         lora = None
     if repo_id:
-        if "kolors" in repo_id.lower():
+        if repo_id.rsplit("/")[-1].lower() in "kwai-kolors/kolors":
             use_kolor = True
             photomake_mode = ""
-        elif "flux" in repo_id.lower():
+        elif repo_id.rsplit("/")[-1].lower() in "black-forest-labs/flux.1-dev,black-forest-labs/flux.1-schnell":
             use_flux = True
             photomake_mode = ""
-        elif "3.5" in repo_id.lower():
+        elif repo_id.rsplit("/")[-1].lower() in"stable-diffusion-3.5-large,stable-diffusion-3.5-large-turbo ":
             SD35_mode = True
         else:
-            pass
-    if pulid:
-        use_flux = True
-        photomake_mode = ""
+            raise "no support repo '/' in repo_id ,please change'\' to '/'"
     
-    return (auraface, NF4, save_model, kolor_face, flux_pulid_name, pulid, quantized_mode, story_maker, make_dual_only,
-            clip_vision_path, char_files, ckpt_path, lora, lora_path, use_kolor, photomake_mode, use_flux,onnx_provider,low_vram,TAG_mode,SD35_mode,consistory,cached,inject,use_quantize)
+    return auraface, NF4, save_model, kolor_face, flux_pulid_name, pulid, quantized_mode, story_maker, make_dual_only, clip_vision_path, char_files, ckpt_path, lora, lora_path, use_kolor, photomake_mode, use_flux,onnx_provider,low_vram,TAG_mode,SD35_mode
 def pre_checkpoint(photomaker_path, photomake_mode, kolor_face, pulid, story_maker, clip_vision_path, use_kolor,
                    model_type):
     if photomake_mode == "v1":
@@ -543,7 +529,7 @@ def kolor_loader(repo_id,model_type,set_attention_processor,id_length,kolor_face
             pipe = pipe.to("cuda")
             pipe.load_ip_adapter_faceid_plus(face_ckpt, device="cuda")
             pipe.set_face_fidelity_scale(0.8)
-    return pipe
+        return pipe
     
     
 def quantized_nf4_extra(ckpt_path,dir_path,mode):
@@ -595,7 +581,7 @@ def quantized_nf4_extra(ckpt_path,dir_path,mode):
     
 
 def flux_loader(folder_paths,ckpt_path,repo_id,AutoencoderKL,save_model,model_type,pulid,clip_vision_path,NF4,vae_id,offload,aggressive_offload,pulid_ckpt,quantized_mode,
-                if_repo,dir_path,clip,onnx_provider,use_quantize):
+                if_repo,dir_path,clip,onnx_provider):
     # pip install optimum-quanto
     # https://gist.github.com/AmericanPresidentJimmyCarter/873985638e1f3541ba8b00137e7dacd9
     timestamp = datetime.datetime.now().strftime("%Y%m%d-%H%M%S")
@@ -674,7 +660,7 @@ def flux_loader(folder_paths,ckpt_path,repo_id,AutoencoderKL,save_model,model_ty
             pipe = FluxGenerator(repo_id, ckpt_path, "cuda", offload=offload,
                                  aggressive_offload=aggressive_offload, pretrained_model=pulid_ckpt,
                                  quantized_mode=quantized_mode, clip_vision_path=clip_vision_path, clip_cf=clip,
-                                 vae_cf=vae_path, if_repo=if_repo,onnx_provider=onnx_provider,use_quantize=use_quantize)
+                                 vae_cf=vae_path, if_repo=if_repo,onnx_provider=onnx_provider)
         else:
             if NF4:
                 logging.info("using repo_id and ckpt ,start flux nf4 quantize processing...")
@@ -845,7 +831,7 @@ def msdiffusion_main(image_1, image_2, prompts_dual, width, height, steps, seed,
                      negative_prompt,
                      clip_vision, _model_type, lora, lora_path, lora_scale, trigger_words, ckpt_path, dif_repo,
                      guidance, mask_threshold, start_step, controlnet_path, control_image, controlnet_scale, cfg,
-                     guidance_list, scheduler_choice,pipe):
+                     guidance_list, scheduler_choice):
     tensor_a = phi2narry(image_1.copy())
     tensor_b = phi2narry(image_2.copy())
     in_img = torch.cat((tensor_a, tensor_b), dim=0)
@@ -860,25 +846,20 @@ def msdiffusion_main(image_1, image_2, prompts_dual, width, height, steps, seed,
     else:
         raise "no model"
     add_config = os.path.join(cur_path, "local_repo")
-    if _model_type=="img2img":
-        del pipe
-        gc.collect()
-        torch.cuda.empty_cache()
-        if single_files:
+    if single_files:
+        try:
+            pipe = StableDiffusionXLPipeline.from_single_file(
+                ckpt_path, config=add_config, original_config=original_config_file,
+                torch_dtype=torch.float16)
+        except:
             try:
                 pipe = StableDiffusionXLPipeline.from_single_file(
-                    ckpt_path, config=add_config, original_config=original_config_file,
+                    ckpt_path, config=add_config, original_config_file=original_config_file,
                     torch_dtype=torch.float16)
             except:
-                try:
-                    pipe = StableDiffusionXLPipeline.from_single_file(
-                        ckpt_path, config=add_config, original_config_file=original_config_file,
-                        torch_dtype=torch.float16)
-                except:
-                    raise "load pipe error!,check you diffusers"
-        else:
-            pipe = StableDiffusionXLPipeline.from_pretrained(dif_repo, torch_dtype=torch.float16)
-    
+                raise "load pipe error!,check you diffusers"
+    else:
+        pipe = StableDiffusionXLPipeline.from_pretrained(dif_repo, torch_dtype=torch.float16)
     
     if controlnet_path:
         controlnet = ControlNetModel.from_unet(pipe.unet)
@@ -901,8 +882,6 @@ def msdiffusion_main(image_1, image_2, prompts_dual, width, height, steps, seed,
     
     if device != "mps":
         pipe.enable_model_cpu_offload()
-        
-    
     torch.cuda.empty_cache()
     # 预加载 ms
     photomaker_local_path = os.path.join(photomaker_dir, "ms_adapter.bin")
@@ -955,6 +934,9 @@ def msdiffusion_main(image_1, image_2, prompts_dual, width, height, steps, seed,
     
     image_ouput = []
     
+    # get role name
+    role_a = char_origin[0].replace("]", "").replace("[", "")
+    role_b = char_origin[1].replace("]", "").replace("[", "")
     # get n p prompt
     prompts_dual, negative_prompt = apply_style(
         style_name, prompts_dual, negative_prompt
@@ -970,22 +952,8 @@ def msdiffusion_main(image_1, image_2, prompts_dual, width, height, steps, seed,
     prompts_dual = [item.replace(char_origin[0], char_describe[0]) for item in prompts_dual if char_origin[0] in item]
     prompts_dual = [item.replace(char_origin[1], char_describe[1]) for item in prompts_dual if char_origin[1] in item]
     
-    #print(char_origin,char_describe)# ['[Taylor]', '[Lecun]']
-
-    if "(" in char_describe[0] and "(" in char_describe[1] :
-
-        role_a = char_describe[0].split(")")[0].split("(")[-1]
-        role_b = char_describe[1].split(")")[0].split("(")[-1]
-        prompts_dual = [i.replace(char_origin[0], "") for i in prompts_dual if char_origin[0] in i]
-        prompts_dual=[i.replace(char_origin[1], "") for i in prompts_dual if char_origin[1] in i]
-    else:
-
-        # get role name
-        role_a = char_origin[0].replace("]", "").replace("[", "")
-        role_b = char_origin[1].replace("]", "").replace("[", "")
-        prompts_dual = [item.replace("[", " ", ).replace("]", " ", ) for item in prompts_dual]
-   
-    #print(prompts_dual,role_a,role_b)
+    prompts_dual = [item.replace("[", " ", ).replace("]", " ", ) for item in prompts_dual]
+    # print(prompts_dual)
     torch.cuda.empty_cache()
     
     phrases = [[role_a, role_b]]
@@ -993,12 +961,14 @@ def msdiffusion_main(image_1, image_2, prompts_dual, width, height, steps, seed,
     
     if mask_threshold:
         boxes = [box_add[:2]]
+        print(f"Roles position on {boxes}")
         # boxes = [[[0., 0.25, 0.4, 0.75], [0.6, 0.25, 1., 0.75]]]  # man+women
     else:
-        boxes = [[[0., 0., 0., 0.], [0., 0., 0., 0.]]]
+        zero_list = [0 for _ in range(4)]
+        boxes = [zero_list for _ in range(2)]
+        boxes = [boxes]  # used if you want no layout guidance
         # print(boxes)
-    print(f"Roles position on {boxes}")
-    
+        
     role_scale=guidance if guidance<=1 else guidance/10 if 1<guidance<=10 else guidance/100
     
     if controlnet_path:
@@ -1435,65 +1405,7 @@ class SD35Wrapper():
      
         self.pipe.maybe_free_model_hooks()
         return img_pil
-
-
-def images_generator(img_list: list, ):
-    # get img size
-    sizes = {}
-    for image_ in img_list:
-        if isinstance(image_, Image.Image):
-            count = sizes.get(image_.size, 0)
-            sizes[image_.size] = count + 1
-        elif isinstance(image_, np.ndarray):
-            count = sizes.get(image_.shape[:2][::-1], 0)
-            sizes[image_.shape[:2][::-1]] = count + 1
-        else:
-            raise "unsupport image list,must be pil or cv2!!!"
-    size = max(sizes.items(), key=lambda x: x[1])[0]
-    yield size[0], size[1]
+        
     
-    # any to tensor
-    def load_image(img_in):
-        if isinstance(img_in, Image.Image):
-            img_in = img_in.convert("RGB")
-            i = np.array(img_in, dtype=np.float32)
-            i = torch.from_numpy(i).div_(255)
-            if i.shape[0] != size[1] or i.shape[1] != size[0]:
-                i = torch.from_numpy(i).movedim(-1, 0).unsqueeze(0)
-                i = common_upscale(i, size[0], size[1], "lanczos", "center")
-                i = i.squeeze(0).movedim(0, -1).numpy()
-            return i
-        elif isinstance(img_in, np.ndarray):
-            i = cv2.cvtColor(img_in, cv2.COLOR_BGR2RGB).astype(np.float32)
-            i = torch.from_numpy(i).div_(255)
-            print(i.shape)
-            return i
-        else:
-            raise "unsupport image list,must be pil,cv2 or tensor!!!"
     
-    total_images = len(img_list)
-    processed_images = 0
-    pbar = ProgressBar(total_images)
-    images = map(load_image, img_list)
-    try:
-        prev_image = next(images)
-        while True:
-            next_image = next(images)
-            yield prev_image
-            processed_images += 1
-            pbar.update_absolute(processed_images, total_images)
-            prev_image = next_image
-    except StopIteration:
-        pass
-    if prev_image is not None:
-        yield prev_image
-
-
-def load_images_list(img_list: list, ):
-    gen = images_generator(img_list)
-    (width, height) = next(gen)
-    images = torch.from_numpy(np.fromiter(gen, np.dtype((np.float32, (height, width, 3)))))
-    if len(images) == 0:
-        raise FileNotFoundError(f"No images could be loaded .")
-    return images
     

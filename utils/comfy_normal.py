@@ -28,7 +28,6 @@ class CFGenerator:
         height,
         num_steps,
         cfg,
-        num_images_per_prompt,
         guidance,
         seed,
         prompt,
@@ -36,6 +35,7 @@ class CFGenerator:
         cf_scheduler,
         denoise,
         image,
+        num_images_per_prompt=1,
     ):
         if isinstance(prompt,str):
             text=prompt
@@ -50,15 +50,19 @@ class CFGenerator:
         else:
             raise "prompt must be str or list"
         
-        batch_size=1
+        batch_size=num_images_per_prompt
         
        
         #cf clip postive
         tokens = self.clip.tokenize(text)
+        #print('!!!!!!!!! tokens is', tokens)
         output = self.clip.encode_from_tokens(tokens, return_pooled=True, return_dict=True)
         cond = output.pop("cond")
+        print(cond.shape)
+        print(output['pooled_output'].shape)
         conditioning=[[cond, output]]
-        
+        #print('!!!!!!!!! conditioning is', conditioning)
+        print('!!!!!!!!! model_type', self.model_type)
         #flux GUIDANCE
         if self.model_type == "FLUX":
             postive_c = node_helpers.conditioning_set_values(conditioning, {"guidance": guidance})
@@ -83,7 +87,7 @@ class CFGenerator:
                 pixels = init_image.unsqueeze(0)
             else:
                 raise "image input error"
-            #print(type(image),image,pixels.shape,type(pixels))
+            print(type(image),image,pixels.shape,type(pixels))
             t = self.ae.encode(pixels[:, :, :, :3])
         else:
             if self.model_type == "FLUX":
@@ -99,8 +103,11 @@ class CFGenerator:
         samples_=samples[0]["samples"]
         img_out=self.ae.decode(samples_)
         #print(img_out.shape,type(img_out))
-        img_pil=tensor_to_image(img_out)
-        return  img_pil
+        img_pil_list = []
+        for i in range(batch_size):
+            img_pil=tensor_to_image(img_out[i,...])
+            img_pil_list.append(img_pil)
+        return  img_pil_list
         
 
 

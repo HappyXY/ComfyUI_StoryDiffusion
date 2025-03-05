@@ -149,7 +149,7 @@ def run_batch_generation(story_pipeline, prompts, concept_token,negative_prompt,
     
     
     # Extended attention with nn_map #
-    
+    print('!!!!!!!!!!!!!!!!! perform_injection')
     if  perform_injection:
         last_masks = story_pipeline.attention_store.last_mask
         dift_features = unet.latent_store.dift_features['251_0'][batch_size:]
