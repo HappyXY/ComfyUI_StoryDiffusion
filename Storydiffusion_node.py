@@ -183,7 +183,7 @@ class SpatialAttnProcessor2_0(torch.nn.Module):
         self.dtype = dtype
         self.hidden_size = hidden_size
         self.cross_attention_dim = cross_attention_dim
-        self.total_length = id_length + 1
+        self.total_length = 5*id_length + 1
         self.id_length = id_length
         self.id_bank = {}
 
@@ -221,11 +221,12 @@ class SpatialAttnProcessor2_0(torch.nn.Module):
                 indices = indices1024
             else:
                 indices = indices4096
+            # print("before attention", hidden_states.shape)
             # print(f"white:{cur_step}")
             total_batch_size, nums_token, channel = hidden_states.shape
             img_nums = total_batch_size // 2
             hidden_states = hidden_states.reshape(-1, img_nums, nums_token, channel)
-            # print(img_nums,len(indices),hidden_states.shape,self.total_length)
+            #print('!!!!!!!!!', img_nums,len(indices),hidden_states.shape,self.total_length)
             if cur_character[0] not in self.id_bank:
                 self.id_bank[cur_character[0]] = {}
             self.id_bank[cur_character[0]][cur_step] = [
@@ -673,7 +674,7 @@ def process_generation(
                             generator=generator
                         ).images
                         id_images.append(id_images_re)
-                        print(id_images)
+                        #print(id_images)
                         print('!!!!!!!! id_images shape', np.array(id_images[0]).shape)
             elif model_type == "img2img":
                 if use_kolor:
@@ -1282,7 +1283,9 @@ def process_generation(
                 f"But you choice {model_type}",
             )
         yield [results_dict[ind] for ind in results_dict.keys()]
-    total_results = [results_dict[ind] for ind in range(len(prompts))]
+    print('!!!!!!!!!!!results_dict', results_dict.keys())
+    sorted_dict = dict(sorted(results_dict.items()))
+    total_results = [results_dict[ind] for ind in sorted_dict.keys()]
     torch.cuda.empty_cache()
     yield total_results
 
