@@ -31,6 +31,7 @@ else:
     from .utils.gradio_utils import AttnProcessor
 import torch.nn.functional as F
 import copy
+import math
 global total_count, attn_count, cur_step, mask1024, mask4096, attn_procs, unet
 global sa32, sa64
 global write
@@ -217,11 +218,12 @@ class SpatialAttnProcessor2_0(torch.nn.Module):
             )
         if write:
             assert len(cur_character) == 1
+            #print("!!!!!!before attention", hidden_states.shape)
             if hidden_states.shape[1] == (height_s // 32) * (width_s // 32):
                 indices = indices1024
             else:
                 indices = indices4096
-            # print("before attention", hidden_states.shape)
+            #print("before attention", hidden_states.shape)
             # print(f"white:{cur_step}")
             total_batch_size, nums_token, channel = hidden_states.shape
             img_nums = total_batch_size // 2
@@ -1402,8 +1404,8 @@ class Storydiffusion_Model_Loader:
         total_length = 5
         attn_procs = {}
         write = False
-        height_s = height
-        width_s = width
+        height_s = math.ceil(height / 32) * 32
+        width_s = math.ceil(width / 32) * 32
         use_cf=False
         use_storydif=False
         use_wrapper = False
@@ -1723,8 +1725,10 @@ class Storydiffusion_Sampler:
         lora=model.get("lora")
         lora_scale =model.get("lora_scale")
         scheduler=model.get("scheduler")
-        height=model.get("height")
-        width = model.get("width")
+        input_height=model.get("height")
+        input_width = model.get("width")
+        height = math.ceil(input_height / 32) * 32
+        width = math.ceil(input_width / 32) * 32
         kolor_face= model.get("kolor_face")
         story_maker=model.get("story_maker")
         face_adapter=model.get("face_adapter")
@@ -1964,10 +1968,10 @@ class Storydiffusion_Sampler:
         for i in range(len(image_list)):
             image_reshape = image_list[i].view(-1, height, width, 3)
             for image_id in range(image_reshape.shape[0]):
-                image_list_new.append(image_reshape[image_id,...])
+                image_list_new.append(image_reshape[image_id,...][:input_height,:input_width,:])
         image_list = image_list_new
         print('!!!!!!len(image_list), image_list[0].shape is', len(image_list), image_list[0].shape)
-        image = torch.from_numpy(np.fromiter(image_list, np.dtype((np.float32, (height, width, 3)))))
+        image = torch.from_numpy(np.fromiter(image_list, np.dtype((np.float32, (input_height, input_width, 3)))))
         if use_storydif and not prompts_dual:
             try:
                pipe.to("cpu")
